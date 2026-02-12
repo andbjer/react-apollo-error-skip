@@ -1,80 +1,67 @@
 /*** APP ***/
-import React, { useState } from "react";
-import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
-import { createRoot } from "react-dom/client";
 import { ApolloClient, InMemoryCache, gql } from "@apollo/client";
 import { Defer20220824Handler } from "@apollo/client/incremental";
 import { LocalState } from "@apollo/client/local-state";
-import { ApolloProvider, useMutation, useQuery } from "@apollo/client/react";
+import { ApolloProvider, useQuery } from "@apollo/client/react";
+import { useState } from "react";
+import { createRoot } from "react-dom/client";
+import { Route, BrowserRouter as Router, Routes } from "react-router-dom";
 
-import { link } from "./link.js";
-import { Subscriptions } from "./subscriptions.jsx";
-import { Layout } from "./layout.jsx";
 import "./index.css";
+import { link } from "./link.js";
 
-const ALL_PEOPLE = gql`
-  query AllPeople {
-    people {
-      id
+const GET_COUNTRY = gql`
+  query GetCountry($name: String!) {
+    countries(filter: { name: { eq: $name } }) {
+      code
       name
-    }
-  }
-`;
-
-const ADD_PERSON = gql`
-  mutation AddPerson($name: String) {
-    addPerson(name: $name) {
-      id
-      name
+      capital
+      currency
+      emoji
     }
   }
 `;
 
 function App() {
   const [name, setName] = useState("");
-  const { loading, data } = useQuery(ALL_PEOPLE);
-
-  const [addPerson] = useMutation(ADD_PERSON, {
-    update: (cache, { data: { addPerson: addPersonData } }) => {
-      const peopleResult = cache.readQuery({ query: ALL_PEOPLE });
-
-      cache.writeQuery({
-        query: ALL_PEOPLE,
-        data: {
-          ...peopleResult,
-          people: [...peopleResult.people, addPersonData],
-        },
-      });
-    },
+  const { loading, data } = useQuery(GET_COUNTRY, {
+    skip: !name,
+    variables: { name },
+    pollInterval: 60 * 1000, // 1 minute
   });
 
   return (
     <main>
       <h3>Home</h3>
-      <div className="add-person">
-        <label htmlFor="name">Name</label>
-        <input
-          type="text"
-          name="name"
-          value={name}
-          onChange={(evt) => setName(evt.target.value)}
-        />
+      <div>
         <button
           onClick={() => {
-            addPerson({ variables: { name } });
-            setName("");
+            setName("Norway");
           }}
         >
-          Add person
+          Get info about Norway
         </button>
       </div>
-      <h2>Names</h2>
+      <h2>Country</h2>
       {loading ? (
         <p>Loading…</p>
       ) : (
         <ul>
-          {data?.people.map((person) => (
-            <li key={person.id}>{person.name}</li>
+          {data?.countries.map((country) => (
+            <li key={country.code}>
+              <dl>
+                <dt>Code</dt>
+                <dd>{country.code}</dd>
+                <dt>Name</dt>
+                <dd>{country.name}</dd>
+                <dt>Capital</dt>
+                <dd>{country.capital}</dd>
+                <dt>Currency</dt>
+                <dd>{country.currency}</dd>
+                <dt>Emoji</dt>
+                <dd>{country.emoji}</dd>
+              </dl>
+            </li>
           ))}
         </ul>
       )}
@@ -85,6 +72,15 @@ function App() {
 const client = new ApolloClient({
   cache: new InMemoryCache(),
   link,
+  defaultOptions: {
+    watchQuery: {
+      fetchPolicy: "cache-and-network",
+      nextFetchPolicy: "cache-first",
+    },
+    query: {
+      fetchPolicy: "network-only",
+    },
+  },
   localState: new LocalState({}),
   incrementalHandler: new Defer20220824Handler(),
 });
@@ -96,11 +92,8 @@ root.render(
   <ApolloProvider client={client}>
     <Router>
       <Routes>
-        <Route path="/" element={<Layout />}>
-          <Route index element={<App />} />
-          <Route path="subscriptions-wslink" element={<Subscriptions />} />
-        </Route>
+        <Route path="/" element={<App />} />
       </Routes>
     </Router>
-  </ApolloProvider>
+  </ApolloProvider>,
 );
